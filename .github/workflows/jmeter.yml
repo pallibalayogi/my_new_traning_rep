@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -24,7 +25,16 @@ jobs:
           wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz
           tar -xzf apache-jmeter-5.6.3.tgz
 
-           - name: Check JMeter failures
+      - name: Run JMeter test
+        run: |
+          mkdir -p results
+          apache-jmeter-5.6.3/bin/jmeter \
+            -n \
+            -t Bookstore.jmx \
+            -l results/result.jtl \
+            -Jjmeter.save.saveservice.output_format=csv
+
+      - name: Check JMeter failures
         run: |
           python - <<'PY'
           import csv
@@ -42,12 +52,16 @@ jobs:
           print(f"Failed samples: {len(failures)}")
 
           if failures:
+              print("JMeter test failed because one or more samples failed.")
               sys.exit(1)
+
+          print("All JMeter samples passed.")
           PY
 
       - name: Generate HTML Dashboard
         if: always()
         run: |
+          rm -rf results/html-report
           apache-jmeter-5.6.3/bin/jmeter \
             -g results/result.jtl \
             -o results/html-report
