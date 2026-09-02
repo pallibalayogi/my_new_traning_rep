@@ -32,6 +32,7 @@ jobs:
             -n \
             -t Bookstore.jmx \
             -l results/result.jtl \
+            -JUSERS=50 \
             -Jjmeter.save.saveservice.output_format=csv
 
       - name: Check JMeter failures
@@ -39,24 +40,44 @@ jobs:
           python - <<'PY'
           import csv
           import sys
+          from collections import Counter
 
           path = "results/result.jtl"
 
           with open(path, newline="", encoding="utf-8") as f:
               reader = csv.DictReader(f)
-              failures = [
-                  row for row in reader
-                  if row.get("success", "").lower() == "false"
-              ]
+              rows = list(reader)
 
+          failures = [
+              row for row in rows
+              if row.get("success", "").lower() == "false"
+          ]
+
+          print(f"Total samples: {len(rows)}")
           print(f"Failed samples: {len(failures)}")
 
           if failures:
-              print("JMeter test failed because one or more samples failed.")
+              print("")
+              print("FAILED REQUEST DETAILS:")
+
+              counts = Counter(
+                  (
+                      row.get("label", "Unknown"),
+                      row.get("responseCode", "Unknown"),
+                      row.get("responseMessage", "Unknown")
+                  )
+                  for row in failures
+              )
+
+              for (label, code, message), count in counts.items():
+                  print(
+                      f"{count} failure(s) | "
+                      f"{label} | HTTP {code} | {message}"
+                  )
+
               sys.exit(1)
 
           print("All JMeter samples passed.")
-          PY
 
       - name: Generate HTML Dashboard
         if: always()
