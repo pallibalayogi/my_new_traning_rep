@@ -32,9 +32,23 @@ jobs:
             -t Bookstore.jmx \
             -l results/result.jtl
 
-      - name: Upload JMeter results
+      - name: Generate HTML Dashboard
+        if: always()
+        run: |
+          apache-jmeter-5.6.3/bin/jmeter \
+            -g results/result.jtl \
+            -o results/html-report
+
+      - name: Upload JMeter report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-html-report
+          path: results/html-report
+
+      - name: Upload JTL results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: jmeter-results
-          path: results/
+          path: results/result.jtl
