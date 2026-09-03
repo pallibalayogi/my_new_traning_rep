@@ -1,0 +1,104 @@
+name: Swagger JMeter Performance Test
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  swagger-jmeter-test:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download JMeter
+        run: |
+          wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz
+          tar -xzf apache-jmeter-5.6.3.tgz
+
+      - name: Run Swagger JMeter Test
+        run: |
+          mkdir -p results
+
+          apache-jmeter-5.6.3/bin/jmeter \
+            -n \
+            -t swagger.jmx \
+            -l results/swagger-result.jtl \
+            -JUSERS=5 \
+            -Jjmeter.save.saveservice.output_format=csv
+
+      - name: Check JMeter failures
+        run: |
+          python - <<'PY'
+          import csv
+          import sys
+          from collections import Counter
+
+          path = "results/swagger-result.jtl"
+
+          with open(path, newline="", encoding="utf-8") as f:
+              reader = csv.DictReader(f)
+              rows = list(reader)
+
+          failures = [
+              row for row in rows
+              if row.get("success", "").lower() == "false"
+          ]
+
+          print(f"Total samples: {len(rows)}")
+          print(f"Failed samples: {len(failures)}")
+
+          if failures:
+              print("")
+              print("FAILED REQUEST DETAILS:")
+
+              counts = Counter(
+                  (
+                      row.get("label", "Unknown"),
+                      row.get("responseCode", "Unknown"),
+                      row.get("responseMessage", "Unknown")
+                  )
+                  for row in failures
+              )
+
+              for (label, code, message), count in counts.items():
+                  print(
+                      f"{count} failure(s) | "
+                      f"{label} | HTTP {code} | {message}"
+                  )
+
+              sys.exit(1)
+
+          print("All JMeter samples passed.")
+
+      - name: Generate HTML Dashboard
+        if: always()
+        run: |
+          rm -rf results/html-report
+
+          apache-jmeter-5.6.3/bin/jmeter \
+            -g results/swagger-result.jtl \
+            -o results/html-report
+
+      - name: Upload Swagger HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swagger-jmeter-html-report
+          path: results/html-report
+
+      - name: Upload Swagger JTL Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swagger-jmeter-results
+          path: results/swagger-result.jtl
